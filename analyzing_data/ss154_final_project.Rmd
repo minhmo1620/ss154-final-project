@@ -1,0 +1,102 @@
+---
+title: "SS154 Final Project"
+author: "Joyce Gu, Nguyen Nguyen, and Minh Nguyen"
+date: "04/23/2021"
+output:
+  word_document: default
+  pdf_document: default
+  
+---
+
+```{r setup, include=FALSE}
+# Don't change this part of the document
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, 
+                      message=FALSE, fig.width=6, fig.align="center")
+# load the necessary packages
+# If you don't have the following packages installed,
+# please install them first. But don't include the installation
+# code here because every time you knit this document they'll 
+# be reinstalled which is not necessary!
+library(Matching)
+library(MatchIt)
+library(cobalt)
+library(knitr)
+library(janitor)
+library(tidyverse)
+library(gridExtra)
+library(optmatch)
+library(robustbase)
+# we need to set the seed of R's random number generator, 
+# in order to produce comparable results 
+set.seed(928)
+```
+
+### Import and format
+```{r}
+# Import the data
+data = read.csv('data.csv')
+# Create treated variable (big city if pop > 250000)
+treated <- ifelse (data$population_in_2010 >= 250000, 1, 0)
+# Create a new column
+data$treated = treated
+# Tier is categorical variable
+data$tier.f = factor(data$tier)
+head(data)
+```
+
+### Matching by matchit
+```{r}
+# Use matchit to match based 
+# Use nearest method to match
+matched_output <- matchit(treated ~ tier.f + sat_avg_2013 + asian_or_pacific_share + black_share + hisp_share + alien_share + par_median, 
+                          data = data, method="nearest", ratio=1)
+
+# Summary of matching process
+summary(matched_output)
+```
+
+### Compare the balance before and after matching
+
+```{r}
+# Plot of each covariate before and after matching
+bal.plot(matched_output, var.name = "tier.f", which = "both")
+bal.plot(matched_output, var.name = "sat_avg_2013", which = "both")
+bal.plot(matched_output, var.name = "par_median", which = "both")
+bal.plot(matched_output, var.name = "asian_or_pacific_share", which = "both")
+bal.plot(matched_output, var.name = "black_share", which = "both")
+bal.plot(matched_output, var.name = "hisp_share", which = "both")
+bal.plot(matched_output, var.name = "alien_share", which = "both")
+```
+
+### Covariate Balance in different plot
+```{r}
+love.plot(matched_output, binary = "std", thresholds = c(m = .2))
+```
+### Regression with matched_data
+```{r}
+# Drop unmatched subject and create matched data
+matched_data <- match.data(matched_output, data=data, group="all", distance ="pscore")
+# Run regression based on the new data- matched data
+fit_matched <- lmrob(starting_median_salary ~ treated + tier.f + sat_avg_2013 + asian_or_pacific_share + black_share + hisp_share + alien_share + par_median, data = matched_data)
+# Summary the regression result
+summary(fit_matched)
+```
+
+### Residuals with unmatched data
+```{r}
+lm.01 <- lmrob(starting_median_salary ~ treated + tier.f + sat_avg_2013 + asian_or_pacific_share + black_share + hisp_share + alien_share + par_median, data = data)
+lm.res = resid(lm.01)
+plot(data$starting_median_salary, lm.res,  ylab="Residuals", xlab="Fitted Values", main="Residual Plot of Median Starting Salary") 
+abline(0, 0)  
+```
+
+### Regression without matching
+```{r}
+# Regression without matching
+fit_unmatched <- lmrob(starting_median_salary ~ treated + tier.f + sat_avg_2013 + asian_or_pacific_share + black_share + hisp_share + alien_share + par_median, data = data)
+
+# Summary of the regression
+summary(fit_unmatched)
+```
+
+
